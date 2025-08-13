@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Digit Clock">
+    <title>Digital Clock</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@900&family=Roboto+Mono:wght@700&family=Playfair+Display:wght@900&family=Poppins:wght@800&family=Bebas+Neue&display=swap" rel="stylesheet">
+    <style>
+        /* Basic reset and full-screen styling */
+        body {
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        /* Animation Keyframes */
+        @keyframes slide-down {
+            0% { opacity: 0; transform: translateY(-50px); }
+            100% { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes fade-in {
+            0% { opacity: 0; }
+            100% { opacity: 1; }
+        }
+
+        @keyframes zoom-in {
+            0% { opacity: 0; transform: scale(0.5); }
+            100% { opacity: 1; transform: scale(1); }
+        }
+
+        @keyframes rotate {
+            0% { opacity: 0; transform: rotateY(90deg); }
+            100% { opacity: 1; transform: rotateY(0deg); }
+        }
+
+        /* Animation Classes */
+        .animation-slide-down { animation: slide-down 0.5s ease-out forwards; }
+        .animation-fade-in { animation: fade-in 0.5s ease-out forwards; }
+        .animation-zoom-in { animation: zoom-in 0.5s ease-out forwards; }
+        .animation-rotate { animation: rotate 0.5s ease-out forwards; }
+    </style>
+</head>
+<body class="bg-gray-900 text-white overflow-hidden flex items-center justify-center h-screen w-screen relative">
+
+    <!-- Digit Display -->
+    <div id="digit-display" class="flex items-center justify-center w-full h-full text-center font-extrabold leading-none transition-colors duration-300"></div>
+
+    <!-- Corner Controls -->
+    <div class="absolute top-4 left-4 right-4 bottom-4 flex flex-col justify-between pointer-events-none">
+        <!-- Top Controls -->
+        <div class="flex justify-between pointer-events-auto">
+            <button id="font-button" class="bg-gray-800/50 text-gray-400 hover:text-white rounded-full w-12 h-12 flex items-center justify-center text-xl font-bold transition-colors">f</button>
+            <button id="decrease-size-button" class="bg-gray-800/50 text-gray-400 hover:text-white rounded-full w-12 h-12 flex items-center justify-center text-3xl font-bold transition-colors">-</button>
+        </div>
+        <!-- Bottom Corner Controls -->
+        <div class="flex justify-end pointer-events-auto">
+            <!-- The change-digit-button was moved from here -->
+            <button id="increase-size-button" class="bg-gray-800/50 text-gray-400 hover:text-white rounded-full w-12 h-12 flex items-center justify-center text-3xl font-bold transition-colors">+</button>
+        </div>
+    </div>
+
+    <!-- Bottom Middle Controls -->
+    <div class="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-4 pointer-events-auto">
+           <button id="change-color-button" class="bg-gray-800/50 text-gray-400 hover:text-white rounded-full w-12 h-12 flex items-center justify-center text-xl font-bold transition-colors">C</button>
+           <button id="animation-button" class="bg-gray-800/50 text-gray-400 hover:text-white rounded-full w-12 h-12 flex items-center justify-center text-xl font-bold transition-colors">A</button>
+           <!-- Moved change-digit-button here -->
+           <button id="change-digit-button" class="bg-gray-800/50 text-gray-400 hover:text-white rounded-full h-12 px-4 flex items-center justify-center text-xl font-bold transition-colors"></button>
+    </div>
+
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // Element references
+            const digitDisplay = document.getElementById('digit-display');
+            const fontButton = document.getElementById('font-button');
+            const decreaseSizeButton = document.getElementById('decrease-size-button');
+            const increaseSizeButton = document.getElementById('increase-size-button');
+            const changeDigitButton = document.getElementById('change-digit-button');
+            const changeColorButton = document.getElementById('change-color-button');
+            const animationButton = document.getElementById('animation-button'); // New animation button
+
+            // Application state
+            const state = {
+                fontSizeOffset: 0,
+                fontIndex: 0,
+                displayTypeIndex: 0,
+                colorIndex: 0,
+                lastSecondsValue: null, // Stores the previous seconds value for selective animation
+                animationIndex: 0, // New state for current animation type
+                currentAnimationClass: 'animation-slide-down', // Default animation
+                tensSpan: null, // Reference to the tens digit span in 'SS' mode
+                unitsSpan: null, // Reference to the units digit span in 'SS' mode
+            };
+
+            // Data arrays
+            const fontFamilies = [
+                '\'Inter\', sans-serif', '\'Roboto Mono\', monospace', '\'Playfair Display\', serif',
+                '\'Bebas Neue\', cursive', '\'Poppins\', sans-serif'
+            ];
+            const colors = [
+                '#FFFFFF', '#34D399', '#F87171', '#60A5FA', '#FBBF24', '#A78BFA'
+            ]; // White, Green, Red, Blue, Amber, Purple
+            const monthNames = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+            const displayTypes = [
+                { id: 'hourTens', label: 'H1' }, { id: 'hourUnits', label: 'H2' },
+                { id: 'minuteTens', label: 'M1' }, { id: 'minuteUnits', label: 'M2' },
+                { id: 'secondTens', label: 'S1' }, { id: 'secondUnits', label: 'S2' },
+                { id: 'secondsBoth', label: 'SS' }, // Option for both seconds digits
+                { id: 'month', label: 'Month' }, { id: 'day', label: 'Day' }
+            ];
+            // New array for animation classes
+            const animationClasses = [
+                'animation-slide-down',
+                'animation-fade-in',
+                'animation-zoom-in',
+                'animation-rotate',
+            ];
+
+            /**
+             * Helper function to remove all specific animation classes from an element.
+             * @param {HTMLElement} element - The DOM element to clean.
+             */
+            function removeAllAnimationClasses(element) {
+                const classes = Array.from(element.classList);
+                classes.forEach(cls => {
+                    if (cls.startsWith('animation-')) {
+                        element.classList.remove(cls);
+                    }
+                });
+            }
+
+            /**
+             * Gets the value for a specific time segment.
+             * @param {string} type - The ID of the display type.
+             * @returns {string} The formatted value.
+             */
+            function getDigitValue(type) {
+                const now = new Date();
+                let hours = now.getHours() % 12;
+                hours = hours === 0 ? 12 : hours; // 12-hour format
+                const formattedHours = String(hours).padStart(2, '0');
+                const minutes = String(now.getMinutes()).padStart(2, '0');
+                const seconds = String(now.getSeconds()).padStart(2, '0');
+
+                switch (type) {
+                    case 'hourTens': return formattedHours[0];
+                    case 'hourUnits': return formattedHours[1];
+                    case 'minuteTens': return minutes[0];
+                    case 'minuteUnits': return minutes[1];
+                    case 'secondTens': return seconds[0];
+                    case 'secondUnits': return seconds[1];
+                    case 'secondsBoth': return seconds; // Return both digits for the new option
+                    case 'month': return monthNames[now.getMonth()];
+                    case 'day': return String(now.getDate());
+                    default: return '';
+                }
+            }
+
+            /**
+             * Updates the displayed digit(s) with animation.
+             */
+            function updateDisplay() {
+                const currentType = displayTypes[state.displayTypeIndex];
+                const newValue = getDigitValue(currentType.id);
+
+                if (currentType.id === 'secondsBoth') {
+                    // Set up digitDisplay for two spans
+                    digitDisplay.classList.add('gap-4');
+                    digitDisplay.classList.remove('justify-center'); // Ensure main display centering doesn't interfere
+
+                    // Check if spans need to be created or recreated 
+                    // (e.g., switched from single digit to SS, or initial load)
+                    const shouldRecreateSpans = digitDisplay.children.length !== 2 || 
+                                               !state.tensSpan || !state.unitsSpan ||
+                                               digitDisplay.children[0] !== state.tensSpan || 
+                                               digitDisplay.children[1] !== state.unitsSpan;
+
+                    if (shouldRecreateSpans) {
+                        digitDisplay.innerHTML = ''; // Clear existing content
+                        
+                        state.tensSpan = document.createElement('span');
+                        state.unitsSpan = document.createElement('span');
+
+                        state.tensSpan.classList.add('flex-1', 'flex', 'items-center', 'justify-center');
+                        state.unitsSpan.classList.add('flex-1', 'flex', 'items-center', 'justify-center');
+
+                        digitDisplay.appendChild(state.tensSpan);
+                        digitDisplay.appendChild(state.unitsSpan);
+                        state.lastSecondsValue = null; // Force initial animation for both when first entering SS
+                    }
+
+                    const oldSecondsValue = state.lastSecondsValue;
+
+                    // Animate and update tens digit
+                    // Trigger animation if value changes or if it's the first time entering SS mode
+                    if (newValue[0] !== state.tensSpan.textContent || oldSecondsValue === null) {
+                        state.tensSpan.textContent = newValue[0];
+                        removeAllAnimationClasses(state.tensSpan);
+                        // Using requestAnimationFrame to ensure the class removal is processed before re-adding
+                        requestAnimationFrame(() => {
+                            state.tensSpan.classList.add(state.currentAnimationClass);
+                        });
+                    }
+
+                    // Animate and update units digit
+                    // Trigger animation if value changes or if it's the first time entering SS mode
+                    if (newValue[1] !== state.unitsSpan.textContent || oldSecondsValue === null) {
+                        state.unitsSpan.textContent = newValue[1];
+                        removeAllAnimationClasses(state.unitsSpan);
+                        requestAnimationFrame(() => {
+                            state.unitsSpan.classList.add(state.currentAnimationClass);
+                        });
+                    }
+                    
+                    state.lastSecondsValue = newValue; // Store current value for next comparison
+
+                } else { // Handle single digit display types
+                    // If we were in 'secondsBoth' mode, or current display is not a single span/has incorrect classes
+                    if (digitDisplay.children.length !== 1 || digitDisplay.classList.contains('gap-4') || 
+                        digitDisplay.children[0] && (!digitDisplay.children[0].textContent || digitDisplay.children[0].classList.contains('flex-1'))) { // Checks if child is a span, if its text content is empty or if it has flex-1 class for two digits.
+
+                        digitDisplay.innerHTML = ''; // Clear existing content
+                        digitDisplay.classList.remove('gap-4');
+                        digitDisplay.classList.add('justify-center'); // Ensure single digit is centered
+                        state.tensSpan = null; // Clear references to two spans
+                        state.unitsSpan = null;
+                    }
+
+                    let span = digitDisplay.querySelector('span'); // Try to get the existing single span
+
+                    if (!span) { // If no single span exists, create one
+                        span = document.createElement('span');
+                        digitDisplay.appendChild(span);
+                    }
+                    // Remove flex-1 classes if they were accidentally added
+                    span.classList.remove('flex-1', 'flex', 'items-center', 'justify-center');
+
+
+                    // Update and animate single digit if content changes
+                    if (span.textContent !== newValue) {
+                        span.textContent = newValue;
+                        removeAllAnimationClasses(span);
+                        requestAnimationFrame(() => {
+                            span.classList.add(state.currentAnimationClass);
+                        });
+                    }
+                    state.lastSecondsValue = null; // Reset lastSecondsValue for non-SS modes
+                }
+                
+                changeDigitButton.textContent = currentType.label;
+            }
+
+            /**
+             * Updates font size based on screen width and user offset.
+             */
+            function updateFontSize() {
+                const baseSize = 85; // A single base size in 'vw' for simplicity
+                digitDisplay.style.fontSize = `${baseSize + state.fontSizeOffset}vw`;
+            }
+
+            /**
+             * Cycles through and applies the next font family.
+             */
+            function changeFont() {
+                state.fontIndex = (state.fontIndex + 1) % fontFamilies.length;
+                digitDisplay.style.fontFamily = fontFamilies[state.fontIndex];
+            }
+            
+            /**
+             * Cycles through and applies the next color.
+             */
+            function changeColor() {
+                state.colorIndex = (state.colorIndex + 1) % colors.length;
+                digitDisplay.style.color = colors[state.colorIndex];
+            }
+
+            /**
+             * Cycles to the next display type.
+             */
+            function cycleDisplayType() {
+                state.displayTypeIndex = (state.displayTypeIndex + 1) % displayTypes.length;
+                updateDisplay(); // Update immediately on cycle
+            }
+
+            /**
+             * Cycles to the next animation type.
+             */
+            function cycleAnimationType() {
+                state.animationIndex = (state.animationIndex + 1) % animationClasses.length;
+                state.currentAnimationClass = animationClasses[state.animationIndex];
+                // Force update to apply new animation immediately to the current display
+                updateDisplay(); 
+            }
+
+
+            // --- Event Listeners ---
+            increaseSizeButton.addEventListener('click', (e) => { e.stopPropagation(); state.fontSizeOffset += 5; updateFontSize(); });
+            decreaseSizeButton.addEventListener('click', (e) => { e.stopPropagation(); state.fontSizeOffset -= 5; updateFontSize(); });
+            fontButton.addEventListener('click', (e) => { e.stopPropagation(); changeFont(); });
+            changeDigitButton.addEventListener('click', (e) => { e.stopPropagation(); cycleDisplayType(); });
+            changeColorButton.addEventListener('click', (e) => { e.stopPropagation(); changeColor(); });
+            animationButton.addEventListener('click', (e) => { e.stopPropagation(); cycleAnimationType(); }); // Event listener for new animation button
+            window.addEventListener('resize', updateFontSize);
+
+            // --- Initial Setup ---
+            function init() {
+                digitDisplay.style.fontFamily = fontFamilies[state.fontIndex];
+                digitDisplay.style.color = colors[state.colorIndex];
+                updateFontSize();
+                updateDisplay();
+                setInterval(updateDisplay, 1000);
+            }
+
+            init();
+        });
+    </script>
+</body>
+</html>
